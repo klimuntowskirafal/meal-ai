@@ -9,3 +9,4 @@ test.py
 pycache/
 __pycache__/
 meal1.webp
+.DS_Stores

@@ -13,6 +13,7 @@ from dotenv import load_dotenv
 from langchain_anthropic import ChatAnthropic
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage
+from openai import OpenAI
 
 load_dotenv()  # Load environment variables
 
@@ -61,7 +62,7 @@ async def estimate_calories(file: UploadFile = File(...)):
 
 async def test_calorie_estimation():
     # Look for image files with various extensions
-    image_patterns = ["meal1.*", "food1.*"]  # Add more patterns if needed
+    image_patterns = ["meal1.*"]  # Add more patterns if needed
     image_path = None
 
     for pattern in image_patterns:
@@ -91,7 +92,8 @@ async def test_calorie_estimation():
 
     # Test different LLMs
     llms_to_test = [
-        test_openai_gpt,
+        # test_openai_gpt,
+        test_xai_gpt,
         # test_google_palm,
         # test_anthropic_claude,
         # Add more LLM test functions as needed
@@ -151,6 +153,49 @@ async def test_openai_gpt(image_bytes):
         raise HTTPException(
             status_code=500,
             detail=f"Error processing image with OpenAI: {str(e)}"
+        )
+
+async def test_xai_gpt(image_bytes):
+    # Convert image bytes to base64
+    base64_image = base64.b64encode(image_bytes).decode('utf-8')
+    
+    # Initialize client with X.AI configuration
+    client = OpenAI(
+        api_key=os.getenv("XAI_API_KEY"),
+        base_url="https://api.x.ai/v1"
+    )
+    
+    try:
+        # Create a text-only message with the base64 image embedded
+        response = client.chat.completions.create(
+            model="grok-beta",
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are Grok, analyze the following image that will be provided as a base64 string."
+                },
+                {
+                    "role": "user",
+                    "content": f"""Here is the base64 encoded image: {base64_image}
+
+Please analyze this meal image and provide:
+1. A list of identified food items
+2. Estimated portion sizes for each item
+3. Estimated calories for each item
+4. Total estimated calories for the entire meal
+
+Please format the response as JSON."""
+                }
+            ],
+            max_tokens=1000
+        )
+        return response.choices[0].message.content
+    except Exception as e:
+        detailed_error = f"Error calling X.AI API: {str(e)}"
+        print(detailed_error)
+        raise HTTPException(
+            status_code=500, 
+            detail=f"Error processing image with X.AI: {str(e)}"
         )
 
 async def test_google_palm(image_bytes):
