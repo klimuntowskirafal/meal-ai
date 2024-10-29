@@ -1,0 +1,11 @@
+venv/
+.env
+test.py
+*.pyc
+*.pyo
+*.pyd
+*.pyw
+*.pyz
+pycache/
+__pycache__/
+meal1.webp
