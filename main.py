@@ -10,6 +10,9 @@ import glob
 import anthropic
 import base64
 from dotenv import load_dotenv
+from langchain_anthropic import ChatAnthropic
+from langchain_openai import ChatOpenAI
+from langchain_core.messages import HumanMessage
 
 load_dotenv()  # Load environment variables
 
@@ -88,9 +91,9 @@ async def test_calorie_estimation():
 
     # Test different LLMs
     llms_to_test = [
-        # test_openai_gpt,
+        test_openai_gpt,
         # test_google_palm,
-        test_anthropic_claude,
+        # test_anthropic_claude,
         # Add more LLM test functions as needed
     ]
 
@@ -104,10 +107,51 @@ async def test_calorie_estimation():
             print(f"Error with {llm_test.__name__}: {str(e)}")
 
 async def test_openai_gpt(image_bytes):
-    # Implement OpenAI GPT-4 with vision capabilities
-    # You'll need to set up the OpenAI API key in your environment variables
-    # This is a placeholder implementation
-    return "OpenAI GPT-4 calorie estimation placeholder"
+    # Convert image bytes to base64
+    base64_image = base64.b64encode(image_bytes).decode('utf-8')
+
+    # Initialize OpenAI client through LangChain with updated model name
+    llm = ChatOpenAI(
+        model="gpt-4o-mini",  # Updated model name
+        max_tokens=300,
+        temperature=0.7
+    )
+
+    # Prepare the message with proper image formatting
+    message = HumanMessage(
+        role="user",
+        content=[
+            {
+                "type": "image_url",
+                "image_url": {
+                    "url": f"data:image/jpeg;base64,{base64_image}",
+                    "detail": "high"  # Added detail level
+                }
+            },
+            {
+                "type": "text",
+                "text": "Please analyze this meal image and provide: \
+                1. A list of identified food items \
+                2. Estimated portion sizes for each item \
+                3. Estimated calories for each item \
+                4. Total estimated calories for the entire meal \
+                5. Confidence level in your estimation (low/medium/high) \
+                Please format the response as JSON."
+            }
+        ]
+    )
+
+    try:
+        # Make the API call
+        response = llm.invoke([message])
+        return response.content
+    except Exception as e:
+        detailed_error = f"Error calling OpenAI API: {str(e)}"
+        print(detailed_error)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error processing image with OpenAI: {str(e)}"
+        )
 
 async def test_google_palm(image_bytes):
     # Implement Google PaLM
@@ -118,53 +162,40 @@ async def test_google_palm(image_bytes):
 async def test_anthropic_claude(image_bytes):
     print('test_anthropic_claude execution')
     
-    # Initialize Anthropic client
-    client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
-    
     # Convert image bytes to base64
     base64_image = base64.b64encode(image_bytes).decode('utf-8')
     
-    # Prepare the message with the image
-    messages = [
-        {
-            "role": "user",
-            "content": [
-                {
-                    "type": "image",
-                    "source": {
-                        "type": "base64",
-                        "media_type": "image/webp",
-                        "data": base64_image
-                    }
-                },
-                {
-                    "type": "text",
-                    "text": "Please analyze this meal image and provide: \
-                    1. A list of identified food items \
-                    2. Estimated portion sizes for each item \
-                    3. Estimated calories for each item \
-                    4. Total estimated calories for the entire meal \
-                    5. Confidence level in your estimation (low/medium/high) \
-                    Please format the response as JSON."
+    # Initialize Anthropic client through LangChain
+    llm = ChatAnthropic(model="claude-3-sonnet-20240229", max_tokens=1000)
+    
+    # Prepare the message
+    message = HumanMessage(
+        content=[
+            {
+                "type": "image",
+                "source": {
+                    "type": "base64",
+                    "media_type": "image/webp",
+                    "data": base64_image
                 }
-            ]
-        }
-    ]
+            },
+            {
+                "type": "text",
+                "text": "Please analyze this meal image and provide: \
+                1. A list of identified food items \
+                2. Estimated portion sizes for each item \
+                3. Estimated calories for each item \
+                4. Total estimated calories for the entire meal \
+                5. Confidence level in your estimation (low/medium/high) \
+                Please format the response as JSON."
+            }
+        ]
+    )
 
     try:
-        # Make the API call to Claude
-        response = client.messages.create(
-            model="claude-3-sonnet-20240229",
-            max_tokens=1000,
-            messages=messages
-        )
-
-        # Extract and parse the response
-        result = response.content[0].text
-        
-        print(f"Claude's response: {result}")
-        return result
-
+        # Make the API call
+        response = llm.invoke([message])
+        return response.content
     except Exception as e:
         print(f"Error calling Claude API: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error processing image with Claude: {str(e)}")
